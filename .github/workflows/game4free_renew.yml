@@ -1,7 +1,7 @@
 name: Game4Free-Random-Debug
 
 on:
-  workflow_dispatch: # 手动触发
+  workflow_dispatch:
 
 jobs:
   debug_renew:
@@ -15,16 +15,36 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: 🛡️ 启动 GOST 代理 (明文隧道)
+      - name: 🛡️ 启动 GOST 代理 (改进版)
+        shell: bash
         run: |
-          wget -q https://github.com/ginuerzh/gost/releases/download/v2.11.5/gost_2.11.5_linux_amd64.tar.gz
-          tar -xzf gost_2.11.5_linux_amd64.tar.gz
+          # 1. 下载并解压 GOST (换了一个更可靠的源和解压方式)
+          curl -L -o gost.tar.gz https://github.com/ginuerzh/gost/releases/download/v2.11.5/gost_2.11.5_linux_amd64.tar.gz
+          tar -xzf gost.tar.gz
           chmod +x gost
-          # 建立本地 8080 到你的 SOCKS5 的隧道
+          
+          # 2. 检查文件是否存在
+          if [ ! -f "./gost" ]; then
+            echo "❌ GOST 二进制文件不存在，下载或解压失败"
+            exit 1
+          fi
+
+          # 3. 启动隧道 (明文写死你的 SOCKS5)
+          echo "🚀 正在建立隧道连接..."
           nohup ./gost -L http://:8080 -F "socks5://506f268b:080db8e0151f@38.58.180.132:3104" > gost.log 2>&1 &
-          sleep 5
-          echo "✅ 代理隧道已就绪"
-          curl -s -x http://127.0.0.1:8080 https://api.ipify.org || echo "⚠️ 代理测试失败"
+          
+          # 4. 等待并验证代理是否通畅
+          sleep 8
+          echo "🌐 测试代理连通性..."
+          PROXY_IP=$(curl -s -x http://127.0.0.1:8080 https://api.ipify.org || echo "failed")
+          
+          if [ "$PROXY_IP" == "failed" ]; then
+            echo "❌ 代理连接失败！请检查你的 SOCKS5 账号密码是否过期或被封 IP"
+            cat gost.log
+            exit 1
+          else
+            echo "✅ 代理已就绪，出口 IP: $PROXY_IP"
+          fi
 
       - name: 🛠️ 安装环境
         run: |
@@ -42,5 +62,5 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: random-debug-results
+          name: debug-results
           path: "*.png"
