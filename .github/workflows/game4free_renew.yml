@@ -1,9 +1,9 @@
-name: Game4Free-Final-Package
+name: Game4Free-Final-Full-Logic
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 */6 * * *' # 每 6 小时自动跑一次
+    - cron: '0 */6 * * *'
 
 jobs:
   renew:
@@ -17,39 +17,30 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: 🛡️ 启动 GOST V3 代理 (指定 v3.2.6)
+      - name: 🛡️ 启动 GOST V3 代理 (出口地址校验版)
         run: |
+          # 下载你指定的 GOST v3.2.6
           curl -fL -o gost.tar.gz "https://github.com/go-gost/gost/releases/download/v3.2.6/gost_3.2.6_linux_amd64v3.tar.gz"
           tar -xzf gost.tar.gz && chmod +x gost
-          # 启动隧道: 本地 8080 -> 你的 SOCKS5
+          
+          # 启动隧道: 本地 8080 -> 你的 SOCKS5 代理
           nohup ./gost -L http://:8080 -F "socks5://506f268b:080db8e0151f@38.58.180.132:3104" > gost.log 2>&1 &
+          
           sleep 8
-          echo "✅ GOST 代理已就绪"
+          echo "🌐 [代理测试] 正在验证出口 IP 地址..."
+          # 这里就是你要求的出口地址查看逻辑
+          EXIT_IP=$(curl -s -x http://127.0.0.1:8080 https://api.ipify.org || echo "连接失败")
+          echo "🌍 当前代理出口 IP 为: $EXIT_IP"
+          
+          if [ "$EXIT_IP" == "连接失败" ]; then
+            echo "❌ 代理不可用，请检查 SOCKS5 账号信息"
+            cat gost.log
+            exit 1
+          fi
 
-      - name: 🧩 下载破解插件 (指定 Buster v3.1.0)
+      - name: 🧩 下载破解插件 (Buster v3.1.0 路径修正版)
         run: |
           curl -fL -o buster.zip "https://github.com/dessant/buster/releases/download/v3.1.0/buster_captcha_solver_for_humans-3.1.0-chrome.zip"
           mkdir -p captcha_solver
           unzip -o buster.zip -d captcha_solver
-          # 检查 manifest.json 位置，确保插件目录正确
-          ls -R captcha_solver
-
-      - name: 🛠️ 安装系统环境
-        run: |
-          sudo apt-get update -q
-          sudo apt-get install -y google-chrome-stable xvfb
-          pip install seleniumbase
-          seleniumbase install chromedriver
-
-      - name: 🚀 运行随机名续期脚本
-        run: |
-          # 关键：通过 xvfb-run 运行，允许脚本内使用 headless=False 加载插件
-          xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" \
-            python renew.py
-
-      - name: 📸 上传截图结果
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: final-results
-          path: "*.png"
+          # 深度清理路径：确保 manifest.json 就在 captcha_solver 目录下，解决加载失败问题
