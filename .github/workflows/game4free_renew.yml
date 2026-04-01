@@ -1,4 +1,4 @@
-name: Game4Free-Firefox-Ultimate
+name: Game4Free-Firefox-NoSnap
 
 on:
   workflow_dispatch:
@@ -35,22 +35,35 @@ jobs:
 
       - name: 🧩 下载 Buster 插件 (Firefox 版 .xpi)
         run: |
-          # 下载专门用于 Firefox 的 Buster 插件
           mkdir -p captcha_solver
           curl -fL -o captcha_solver/buster.xpi "https://addons.mozilla.org/firefox/downloads/file/4067332/buster_captcha_solver_for_humans-3.1.0.xpi"
           echo "✅ Firefox 插件准备就绪"
 
-      - name: 🛠️ 安装 Firefox 环境
+      - name: 🛠️ 安装 Firefox 环境 (绕过 Snap 陷阱)
         run: |
-          sudo apt-get update -q
-          # 安装 Firefox 和 Geckodriver
-          sudo apt-get install -y firefox
+          # 1. 移除可能存在的 Snap 版（防止冲突）
+          sudo snap remove firefox || true
+          
+          # 2. 添加 Mozilla 官方 PPA 仓库
+          sudo add-apt-repository -y ppa:mozillateam/ppa
+          
+          # 3. 设置优先级：强制 apt 使用 PPA 而不是 Snap
+          echo '
+          Package: *
+          Pin: release o=LP-PPA-mozillateam
+          Pin-Priority: 1001
+          ' | sudo tee /etc/apt/preferences.d/mozilla-firefox
+          
+          # 4. 安装 Firefox 和相关依赖
+          sudo apt-get update
+          sudo apt-get install -y firefox xvfb
+          
+          # 5. 安装 Python 依赖和驱动
           pip install seleniumbase
           seleniumbase install geckodriver
 
       - name: 🚀 运行随机名续期脚本 (Firefox 引擎)
         run: |
-          # 配合 xvfb 运行
           xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" \
             python renew.py
 
