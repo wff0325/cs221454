@@ -1,4 +1,4 @@
-name: Game4Free-Final-Debug
+name: Game4Free-V3-BusterV3-Final
 
 on:
   workflow_dispatch:
@@ -15,31 +15,29 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: 🛡️ 启动 GOST 代理 (直链硬核版)
+      - name: 🛡️ 启动 GOST V3 代理 (使用指定 v3.2.6 直链)
         run: |
-          # 1. 使用官方确定的 v2.11.5 直链，避免通配符匹配失败
-          curl -fL -o gost.tar.gz "https://github.com/ginuerzh/gost/releases/download/v2.11.5/gost_2.11.5_linux_amd64.tar.gz"
+          # 下载你指定的 GOST v3.2.6
+          curl -fL -o gost.tar.gz "https://github.com/go-gost/gost/releases/download/v3.2.6/gost_3.2.6_linux_amd64v3.tar.gz"
+          tar -xzf gost.tar.gz
+          chmod +x gost
           
-          # 检查文件是否下载成功（9字节检测）
-          SIZE=$(stat -c%s "gost.tar.gz")
-          if [ "$SIZE" -lt 1000 ]; then echo "❌ 下载失败"; exit 1; fi
-          
-          tar -xzf gost.tar.gz && chmod +x gost
-          
-          # 2. 启动隧道 (使用你提供的明文代理)
+          # 启动隧道 (本地 8080 -> 你的 SOCKS5)
           nohup ./gost -L http://:8080 -F "socks5://506f268b:080db8e0151f@38.58.180.132:3104" > gost.log 2>&1 &
-          sleep 5
-          echo "✅ GOST 已启动"
+          
+          sleep 8
+          echo "✅ GOST V3.2.6 已启动"
+          curl -s -x http://127.0.0.1:8080 https://api.ipify.org || echo "代理连接测试失败"
 
-      - name: 🧩 下载 Buster 插件 (直链硬核版)
+      - name: 🧩 下载破解插件 (使用指定 Buster v3.1.0 直链)
         run: |
-          # 使用 Buster 2.0.1 确定的直链
-          curl -fL -o buster.zip "https://github.com/dessant/buster/releases/download/v2.0.1/buster-2.0.1-chrome.zip"
+          # 下载你指定的 Buster v3.1.0
+          curl -fL -o buster.zip "https://github.com/dessant/buster/releases/download/v3.1.0/buster_captcha_solver_for_humans-3.1.0-chrome.zip"
           mkdir -p captcha_solver
           unzip -o buster.zip -d captcha_solver
-          echo "✅ 插件已准备"
+          echo "✅ Buster V3.1.0 插件已就绪"
 
-      - name: 🛠️ 安装环境
+      - name: 🛠️ 安装系统环境
         run: |
           sudo apt-get update -q
           sudo apt-get install -y google-chrome-stable xvfb
@@ -55,5 +53,5 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: debug-screenshots
+          name: v3-buster3-results
           path: "*.png"
