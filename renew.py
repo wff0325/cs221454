@@ -24,61 +24,54 @@ def run_renew():
             
             # 2. 填名
             sb.type("input[placeholder*='Username']", RANDOM_PLAYER_NAME)
-            print("✍️ 已填名")
+            print(f"✍️ 已填名: {RANDOM_PLAYER_NAME}")
 
-            # 3. 核心：处理验证码
-            print("🛡️ 正在触发验证码...")
+            # 3. 处理验证码
+            print("🛡️ 触发验证码 Checkbox...")
             sb.switch_to_frame('iframe[title*="reCAPTCHA"]')
             sb.click(".recaptcha-checkbox-border")
-            sb.sleep(4) # 等待是否弹出挑战框
+            sb.sleep(5)
             
-            # 4. 尝试触发 Buster 破解插件
-            # 切换回主页面，寻找可能弹出的图片挑战 iframe
+            # 4. 尝试寻找挑战框并启动 Buster
             sb.switch_to_default_content()
             
-            # 谷歌验证码的挑战框通常在另一个 iframe 里
-            challenge_iframe = 'iframe[title*="验证码挑战"]'
-            if not sb.is_element_present(challenge_iframe):
-                challenge_iframe = 'iframe[title*="recaptcha challenge"]'
-
-            if sb.is_element_present(challenge_iframe):
-                print("📸 发现图片挑战，启动 Buster 破解...")
-                sb.switch_to_frame(challenge_iframe)
-                
-                # 点击 Buster 插件的小图标（那个黄色的小人/人头图标）
-                # 插件加载后，在验证码挑战框底部会出现一个按钮
-                buster_button = "button#solver-button"
-                if sb.is_element_visible(buster_button):
-                    sb.click(buster_button)
-                    print("⚡ 已点击 Buster 破解按钮，等待语音 Hash 比对...")
-                    sb.sleep(20) # 插件破解需要时间
-                else:
-                    print("⚠️ 未找到 Buster 插件按钮，尝试硬等...")
-                    sb.sleep(20)
+            # 查找挑战框的多种可能 ID/Title
+            challenge_iframes = ['iframe[title*="验证码挑战"]', 'iframe[title*="recaptcha challenge"]', 'iframe[src*="bframe"]']
+            
+            for frame in challenge_iframes:
+                if sb.is_element_present(frame):
+                    print(f"📸 发现挑战框: {frame}，启动 Buster 破解...")
+                    sb.switch_to_frame(frame)
+                    
+                    # Buster 插件会在验证码底部生成一个按钮
+                    # 尝试点击它的 ID：solver-button
+                    if sb.is_element_visible("button#solver-button"):
+                        sb.click("button#solver-button")
+                        print("⚡ Buster 已介入，正在进行语音识别...")
+                        sb.sleep(20) # 语音 Hash 破解需要较长时间
+                    break
             
             sb.switch_to_default_content()
-            sb.save_screenshot("02_after_solver.png")
+            sb.save_screenshot("02_captcha_result.png")
 
-            # 5. 检查提交按钮
+            # 5. 等待按钮激活
             submit_btn = "button:contains('Complete Verification')"
-            
-            # 循环检查 10 次，每次等 3 秒，看验证码是否通过（按钮变绿）
-            for i in range(10):
+            for i in range(15):
                 if sb.is_element_enabled(submit_btn):
-                    print(f"✅ 验证通过！(第{i+1}次尝试)")
+                    print(f"✅ 验证成功！(第{i+1}次检查)")
                     sb.click(submit_btn)
                     sb.sleep(5)
-                    sb.save_screenshot("03_success.png")
+                    sb.save_screenshot("03_final_success.png")
+                    print("🎉 续期完成！")
                     return
-                print(f"⏳ 正在等待验证码校验完成... ({i+1}/10)")
                 sb.sleep(3)
 
-            print("❌ 验证码未能通过，按钮仍处于禁用状态。")
+            print("❌ 无法通过验证，按钮未激活。")
             sb.save_screenshot("03_final_failed.png")
 
         except Exception as e:
             print(f"💥 异常: {e}")
-            sb.save_screenshot("crash.png")
+            sb.save_screenshot("error_crash.png")
 
 if __name__ == "__main__":
     run_renew()
