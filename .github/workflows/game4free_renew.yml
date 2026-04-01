@@ -1,0 +1,46 @@
+name: Game4Free-Random-Debug
+
+on:
+  workflow_dispatch: # 手动触发
+
+jobs:
+  debug_renew:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 检出代码
+        uses: actions/checkout@v4
+
+      - name: 🐍 设置 Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: 🛡️ 启动 GOST 代理 (明文隧道)
+        run: |
+          wget -q https://github.com/ginuerzh/gost/releases/download/v2.11.5/gost_2.11.5_linux_amd64.tar.gz
+          tar -xzf gost_2.11.5_linux_amd64.tar.gz
+          chmod +x gost
+          # 建立本地 8080 到你的 SOCKS5 的隧道
+          nohup ./gost -L http://:8080 -F "socks5://506f268b:080db8e0151f@38.58.180.132:3104" > gost.log 2>&1 &
+          sleep 5
+          echo "✅ 代理隧道已就绪"
+          curl -s -x http://127.0.0.1:8080 https://api.ipify.org || echo "⚠️ 代理测试失败"
+
+      - name: 🛠️ 安装环境
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y google-chrome-stable xvfb
+          pip install seleniumbase
+          seleniumbase install chromedriver
+
+      - name: 🚀 运行随机名续期脚本
+        run: |
+          xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" \
+            python renew.py
+
+      - name: 📸 上传截图结果
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: random-debug-results
+          path: "*.png"
