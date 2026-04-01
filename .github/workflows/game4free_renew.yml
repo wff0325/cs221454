@@ -19,8 +19,10 @@ jobs:
 
       - name: 🛡️ 启动 GOST V3 代理 (出口地址校验版)
         run: |
+          # 下载 GOST v3.2.6
           curl -fL -o gost.tar.gz "https://github.com/go-gost/gost/releases/download/v3.2.6/gost_3.2.6_linux_amd64v3.tar.gz"
           tar -xzf gost.tar.gz && chmod +x gost
+          # 启动隧道
           nohup ./gost -L http://:8080 -F "socks5://506f268b:080db8e0151f@38.58.180.132:3104" > gost.log 2>&1 &
           sleep 8
           echo "🌐 [代理测试] 正在验证出口 IP 地址..."
@@ -31,12 +33,16 @@ jobs:
             exit 1
           fi
 
-      - name: 🧩 下载破解插件 (Buster v3.1.0)
+      - name: 🧩 下载并解压破解插件 (Buster v3.1.0 路径强制扁平化)
         run: |
           curl -fL -o buster.zip "https://github.com/dessant/buster/releases/download/v3.1.0/buster_captcha_solver_for_humans-3.1.0-chrome.zip"
           mkdir -p captcha_solver
-          unzip -o buster.zip -d captcha_solver
-          find captcha_solver -name "manifest.json" -exec dirname {} \; | xargs -I {} mv {}/* captcha_solver/ || true
+          unzip -q buster.zip -d buster_temp
+          # 这一步非常重要：不管解压出来几层，把带 manifest.json 的那一层所有内容移到根目录
+          SEARCH_DIR=$(find buster_temp -name "manifest.json" -exec dirname {} \;)
+          cp -r $SEARCH_DIR/. captcha_solver/
+          echo "✅ 插件目录确认 (必须看到 manifest.json):"
+          ls captcha_solver/manifest.json
 
       - name: 🛠️ 安装系统环境
         run: |
