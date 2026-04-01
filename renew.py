@@ -20,60 +20,61 @@ def run_test():
     with SB(uc=True, headless=True, proxy=PROXY_ADDR) as sb:
         try:
             # 1. 访问登录页
+            # UC模式下，sb.open会自动尝试处理Cloudflare等待页
             sb.open("https://panel.freegamehost.xyz/auth/login")
-            time.sleep(8) # 等待 Cloudflare 和 验证码加载
-            
-            # 尝试处理可能存在的验证码 (UC模式特有)
-            if sb.is_captcha_present():
-                logger.info("发现验证码，尝试自动绕过...")
-                sb.uc_gui_click_captcha()
-                time.sleep(5)
+            time.sleep(10) # 留足时间让页面和验证码加载
 
-            # 输入账号密码
+            # 2. 输入账号密码
             if sb.is_element_visible('input[name="username"]'):
                 logger.info("正在输入账号密码...")
                 sb.type('input[name="username"]', USER_EMAIL)
                 sb.type('input[name="password"]', USER_PASS)
                 
-                # 点击登录并等待
-                sb.click('button[type="submit"]')
-                logger.info("已点击登录，等待跳转至仪表盘...")
+                # 使用 uc_click (模拟真人点击) 替代普通 click，防止被识别
+                login_btn = 'button[type="submit"]'
+                if sb.is_element_visible(login_btn):
+                    logger.info("点击登录按钮...")
+                    sb.uc_click(login_btn)
+                else:
+                    # 如果找不到按钮，尝试回车登录
+                    sb.press_keys('input[name="password"]', '\n')
+                
                 time.sleep(15) # 登录跳转通常比较慢
 
-            # --- 关键：验证是否真的登录成功了 ---
-            # 检查 URL 是否还包含 /login，或者是否存在登出按钮
+            # --- 验证是否登录成功 ---
             current_url = sb.get_current_url()
-            if "login" in current_url:
-                logger.error("❌ 登录失败！仍然停留在登录页面。")
-                sb.save_screenshot("login_failed_stayed_at_login.png")
-                # 尝试再次强制点击一下登录（有时候第一次点击无效）
-                if sb.is_element_visible('button[type="submit"]'):
-                    sb.click('button[type="submit"]')
-                    time.sleep(10)
+            logger.info(f"当前页面URL: {current_url}")
             
-            # 2. 只有登录成功才跳转控制台
+            if "login" in current_url:
+                logger.warning("⚠️ 仍然在登录页面，尝试第二次强制登录...")
+                sb.save_screenshot("login_retry.png")
+                sb.type('input[name="password"]', USER_PASS)
+                sb.click('button[type="submit"]')
+                time.sleep(10)
+
+            # 3. 跳转到服务器控制台
             console_url = f"https://panel.freegamehost.xyz/server/{SERVER_ID}"
             sb.open(console_url)
-            logger.info(f"正在跳转到服务器控制台: {console_url}")
-            time.sleep(15) # 翼龙面板加载后端数据非常慢
+            logger.info(f"正在跳转到控制台: {console_url}")
+            time.sleep(15) # 翼龙面板后台数据加载较慢
 
-            # 再次检查是否被踢回登录页
-            if "login" in sb.get_current_url():
-                logger.error("❌ 跳转失败！被重定向回了登录页，可能是Session未生效。")
-                sb.save_screenshot("redirected_back_to_login.png")
-                return
+            # 保存一张控制台的截图，确认是否进去了
+            sb.save_screenshot("console_page.png")
 
-            # 3. 检查续费按钮
+            # 4. 检查续费逻辑
             timer_selector = "div[class*='RenewBox__TimerDigits']"
             renew_btn = "button:contains('Renew')"
             cooldown_text = "RENEWAL COOLDOWN"
 
+            # 尝试抓取倒计时
             if sb.is_element_visible(timer_selector):
-                logger.info(f"⏳ 成功识别倒计时: {sb.get_text(timer_selector)}")
+                time_val = sb.get_text(timer_selector)
+                logger.info(f"⏳ 成功识别倒计时: {time_val}")
 
+            # 寻找并点击续费
             if sb.is_element_visible(renew_btn):
                 logger.info("🎯 发现 Renew 按钮，开始点击...")
-                sb.click(renew_btn)
+                sb.uc_click(renew_btn) # 使用模拟真人点击
                 time.sleep(5)
                 
                 # 检查确认弹窗
@@ -82,13 +83,11 @@ def run_test():
                     time.sleep(3)
                 
                 logger.info("✅ 续费流程已触发！")
-                sb.save_screenshot("success_renew.png")
+                sb.save_screenshot("success_final.png")
             elif sb.is_text_visible(cooldown_text):
-                logger.info("ℹ️ 状态提示：仍在冷却中 (Cooldown)。")
-                sb.save_screenshot("cooldown_status.png")
+                logger.info("ℹ️ 状态提示：仍在冷却中 (Cooldown)，无需续费。")
             else:
-                logger.warning("⚠️ 状态不明：没看到按钮也没看到冷却文字。")
-                sb.save_screenshot("unknown_status_debug.png")
+                logger.warning("⚠️ 状态不明：既没看到按钮也没看到冷却文字。")
 
         except Exception as e:
             logger.error(f"❌ 运行报错: {str(e)}")
