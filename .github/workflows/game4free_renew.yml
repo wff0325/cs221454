@@ -21,7 +21,7 @@ jobs:
         run: |
           curl -fL -o gost.tar.gz "https://github.com/go-gost/gost/releases/download/v3.2.6/gost_3.2.6_linux_amd64v3.tar.gz"
           tar -xzf gost.tar.gz && chmod +x gost
-          nohup ./gost -L http://:8080 -F "socks5://506f268b:080db8e0151f@38.58.180.132:3104" > gost.log 2>&1 &
+          nohup ./gost -L http://:8080 -F "socks5://6974305c:c37294d346da@65.108.224.31:26706" > gost.log 2>&1 &
           
           sleep 10
           echo "🌐 [代理测试] 正在验证出口 IP 地址..."
