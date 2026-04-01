@@ -19,34 +19,24 @@ jobs:
 
       - name: 🛡️ 启动 GOST V3 代理 (出口地址校验版)
         run: |
-          # 下载你指定的 GOST v3.2.6
           curl -fL -o gost.tar.gz "https://github.com/go-gost/gost/releases/download/v3.2.6/gost_3.2.6_linux_amd64v3.tar.gz"
           tar -xzf gost.tar.gz && chmod +x gost
-          
-          # 启动隧道: 本地 8080 -> 你的 SOCKS5 代理
           nohup ./gost -L http://:8080 -F "socks5://506f268b:080db8e0151f@38.58.180.132:3104" > gost.log 2>&1 &
-          
           sleep 8
           echo "🌐 [代理测试] 正在验证出口 IP 地址..."
-          # 这里就是你要求的出口地址查看逻辑
           EXIT_IP=$(curl -s -x http://127.0.0.1:8080 https://api.ipify.org || echo "连接失败")
           echo "🌍 当前代理出口 IP 为: $EXIT_IP"
-          
           if [ "$EXIT_IP" == "连接失败" ]; then
-            echo "❌ 代理不可用，请检查 SOCKS5 账号信息"
-            cat gost.log
+            echo "❌ 代理不可用"
             exit 1
           fi
 
-      - name: 🧩 下载破解插件 (Buster v3.1.0 路径修正版)
+      - name: 🧩 下载破解插件 (Buster v3.1.0)
         run: |
           curl -fL -o buster.zip "https://github.com/dessant/buster/releases/download/v3.1.0/buster_captcha_solver_for_humans-3.1.0-chrome.zip"
           mkdir -p captcha_solver
           unzip -o buster.zip -d captcha_solver
-          # 深度清理路径：确保 manifest.json 就在 captcha_solver 目录下，解决加载失败问题
           find captcha_solver -name "manifest.json" -exec dirname {} \; | xargs -I {} mv {}/* captcha_solver/ || true
-          echo "✅ 插件目录结构确认:"
-          ls captcha_solver/manifest.json
 
       - name: 🛠️ 安装系统环境
         run: |
@@ -57,7 +47,6 @@ jobs:
 
       - name: 🚀 运行随机名续期脚本
         run: |
-          # 必须通过 xvfb-run 配合 headless=False 才能让插件图标显示
           xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" \
             python renew.py
 
