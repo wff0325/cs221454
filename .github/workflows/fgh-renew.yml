@@ -1,0 +1,58 @@
+name: FGH-Renew
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 */6 * * *' # 每6小时运行一次
+
+jobs:
+  run_fgh_renew:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 获取代码
+        uses: actions/checkout@v4 # 直接检出当前仓库的所有文件（包括 renew.py）
+
+      - name: 🐍 设置 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: 🛡️ 启动 GOST 代理转发
+        if: ${{ secrets.GOST_PROXY != '' }}
+        env:
+          GOST_PROXY: ${{ secrets.GOST_PROXY }}
+        run: |
+          VERSION=$(curl -s https://api.github.com/repos/ginuerzh/gost/releases/latest | grep '"tag_name"' | cut -d'"' -f4 | tr -d 'v')
+          wget -q "https://github.com/ginuerzh/gost/releases/download/v${VERSION}/gost_${VERSION}_linux_amd64.tar.gz"
+          tar -xzf "gost_${VERSION}_linux_amd64.tar.gz"
+          chmod +x gost
+          nohup ./gost -L http://:8080 -F "$GOST_PROXY" > gost.log 2>&1 &
+          sleep 5
+          echo "✅ GOST 代理已启动 (127.0.0.1:8080)"
+
+      - name: 🛠️ 安装环境
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y google-chrome-stable xvfb
+          pip install seleniumbase requests
+          seleniumbase install chromedriver
+
+      - name: 🚀 运行续费脚本
+        env:
+          PYTHONIOENCODING: utf-8
+          # 格式: 邮箱#密码#服务器ID
+          FGH_ACCOUNT: ${{ secrets.FGH_ACCOUNT }}
+          # 代理信息
+          GOST_PROXY: ${{ secrets.GOST_PROXY }}
+          # TG通知 (可选)
+          TG_BOT: ${{ secrets.TG_BOT }}
+        run: |
+          # 确保脚本在根目录执行
+          xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" python renew.py
+
+      - name: 📸 上传调试截图
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-screenshots
+          path: "*.png"
+          retention-days: 3
