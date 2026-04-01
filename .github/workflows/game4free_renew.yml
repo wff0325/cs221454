@@ -1,4 +1,4 @@
-name: Game4Free-Final-Full-Logic
+name: Game4Free-Firefox-Ultimate
 
 on:
   workflow_dispatch:
@@ -17,48 +17,46 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: 🛡️ 启动 GOST V3 代理 (出口地址校验版)
+      - name: 🛡️ 启动 GOST V3 代理 (出口地址校验)
         run: |
-          # 下载 GOST v3.2.6
           curl -fL -o gost.tar.gz "https://github.com/go-gost/gost/releases/download/v3.2.6/gost_3.2.6_linux_amd64v3.tar.gz"
           tar -xzf gost.tar.gz && chmod +x gost
-          # 启动隧道
           nohup ./gost -L http://:8080 -F "socks5://506f268b:080db8e0151f@38.58.180.132:3104" > gost.log 2>&1 &
-          sleep 8
+          
+          sleep 10
           echo "🌐 [代理测试] 正在验证出口 IP 地址..."
           EXIT_IP=$(curl -s -x http://127.0.0.1:8080 https://api.ipify.org || echo "连接失败")
           echo "🌍 当前代理出口 IP 为: $EXIT_IP"
+          
           if [ "$EXIT_IP" == "连接失败" ]; then
-            echo "❌ 代理不可用"
+            echo "❌ 代理不可用，请检查 SOCKS5 账号"
             exit 1
           fi
 
-      - name: 🧩 下载并解压破解插件 (Buster v3.1.0 路径强制扁平化)
+      - name: 🧩 下载 Buster 插件 (Firefox 版 .xpi)
         run: |
-          curl -fL -o buster.zip "https://github.com/dessant/buster/releases/download/v3.1.0/buster_captcha_solver_for_humans-3.1.0-chrome.zip"
+          # 下载专门用于 Firefox 的 Buster 插件
           mkdir -p captcha_solver
-          unzip -q buster.zip -d buster_temp
-          # 这一步非常重要：不管解压出来几层，把带 manifest.json 的那一层所有内容移到根目录
-          SEARCH_DIR=$(find buster_temp -name "manifest.json" -exec dirname {} \;)
-          cp -r $SEARCH_DIR/. captcha_solver/
-          echo "✅ 插件目录确认 (必须看到 manifest.json):"
-          ls captcha_solver/manifest.json
+          curl -fL -o captcha_solver/buster.xpi "https://addons.mozilla.org/firefox/downloads/file/4067332/buster_captcha_solver_for_humans-3.1.0.xpi"
+          echo "✅ Firefox 插件准备就绪"
 
-      - name: 🛠️ 安装系统环境
+      - name: 🛠️ 安装 Firefox 环境
         run: |
           sudo apt-get update -q
-          sudo apt-get install -y google-chrome-stable xvfb
+          # 安装 Firefox 和 Geckodriver
+          sudo apt-get install -y firefox
           pip install seleniumbase
-          seleniumbase install chromedriver
+          seleniumbase install geckodriver
 
-      - name: 🚀 运行随机名续期脚本
+      - name: 🚀 运行随机名续期脚本 (Firefox 引擎)
         run: |
+          # 配合 xvfb 运行
           xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" \
             python renew.py
 
-      - name: 📸 上传截图结果
+      - name: 📸 上传截图
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: final-results
+          name: firefox-debug-results
           path: "*.png"
