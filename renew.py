@@ -5,93 +5,96 @@ import string
 from seleniumbase import SB
 
 def generate_random_name():
+    """生成 8 位随机玩家名"""
     return ''.join(random.choices(string.ascii_letters + string.digits, k=8))
 
 def run_renew():
     TARGET_URL = "https://game4free.net/myplay"
     RANDOM_NAME = generate_random_name()
-    EXT_DIR = os.path.abspath("captcha_solver")
+    # Firefox 插件通常是一个 .xpi 文件
+    EXT_PATH = os.path.abspath("captcha_solver/buster.xpi")
     
-    print(f"🎲 [步骤 1] 随机生成玩家名: {RANDOM_NAME}")
-    print(f"🧩 [步骤 1] 插件绝对路径: {EXT_DIR}")
+    print(f"🎲 [Step 1] 随机玩家名: {RANDOM_NAME}")
+    print(f"🧩 [Step 1] Firefox 插件路径: {EXT_PATH}")
 
-    with SB(uc=True, 
-            headless=False, 
-            proxy="127.0.0.1:8080", 
-            extension_dir=EXT_DIR,
-            chromium_arg="--load-extension={}".format(EXT_DIR)) as sb:
+    # 使用 SB 启动 Firefox 模式
+    # 注意：browser="firefox"
+    with SB(browser="firefox",
+            headless=False, # xvfb 环境下设为 False 以加载插件
+            proxy="127.0.0.1:8080") as sb:
+        
         try:
-            # 1. 打开并填名
-            sb.uc_open_with_reconnect(TARGET_URL, 6)
-            sb.sleep(5)
+            # 1. 访问网页
+            print(f"🔗 [Step 2] 正在通过 Firefox 打开页面: {TARGET_URL}")
+            sb.open(TARGET_URL)
+            sb.sleep(6)
+            
+            # 【Firefox 特色】手动注入插件 (Firefox 自动加载 XPI 有时不稳定)
+            # SeleniumBase 会处理大部分情况，如果不行我们可以通过下面的步骤
+            
+            # 2. 填写玩家名
+            print(f"✍️ [Step 3] 填入名字...")
             sb.type("input[placeholder*='Username']", RANDOM_NAME)
-            print(f"✍️ [步骤 2] 已填入名字")
+            sb.save_screenshot("01_after_typing_name.png")
 
-            # 2. 触发 Checkbox
+            # 3. 触发验证码
+            print("🛡️ [Step 4] 点击 reCAPTCHA 复选框...")
             sb.switch_to_frame('iframe[title*="reCAPTCHA"]')
             sb.click(".recaptcha-checkbox-border")
             sb.switch_to_default_content()
-            sb.sleep(4)
+            sb.sleep(5)
 
-            # 3. 挑战框处理
+            # 4. 破解逻辑
             challenge_frame = 'iframe[title*="挑战"], iframe[title*="challenge"], iframe[src*="bframe"]'
             if sb.is_element_present(challenge_frame):
-                print("📸 [步骤 4] 发现挑战框，进入破解逻辑...")
+                print("📸 [Step 5] 发现挑战框，尝试加载 Buster...")
                 sb.switch_to_frame(challenge_frame)
                 sb.sleep(2)
                 
                 # 切换到语音验证
                 if sb.is_element_visible("#recaptcha-audio-button"):
                     sb.click("#recaptcha-audio-button")
-                    print("🎧 已切换到语音验证模式")
-                    sb.sleep(5) # 给插件时间注入图标
+                    print("🎧 已切换到语音模式，等待插件图标...")
+                    sb.sleep(6)
                 
-                # 检查插件按钮是否存在 (Buster 的 ID 是 solver-button)
-                buster_btn = "#solver-button"
-                if not sb.is_element_visible(buster_btn):
-                    print("⚠️ 插件图标未出现，尝试点击刷新验证码以强制插件加载...")
-                    sb.click("#recaptcha-reload-button")
-                    sb.sleep(5)
+                # 寻找 Buster 图标
+                buster_btn = "button#solver-button, .solver-button, .help-button-holder"
                 
                 if sb.is_element_visible(buster_btn):
-                    for attempt in range(2):
-                        print(f"🚀 点击 Buster 破解按钮 (尝试 {attempt+1})...")
-                        sb.click(buster_btn)
-                        sb.sleep(25) # 等待语音 Hash 比对结果
-                        
-                        # 如果识别成功，Verify 按钮应该会变成可点击或者自动消失
-                        if not sb.is_element_visible(buster_btn):
-                            print("✅ 破解成功，插件按钮已消失")
-                            break
-                        sb.sleep(5)
+                    print("🚀 [SUCCESS] Firefox 下发现 Buster 图标！执行破解...")
+                    sb.click(buster_btn)
+                    sb.sleep(35)
                 else:
-                    print("❌ [严重错误] 插件图标依然未出现。请检查 03_no_buster_icon.png")
-                    sb.save_screenshot("03_no_buster_icon.png")
-
+                    print("⚠️ [Error] Firefox 依然没看到图标。")
+                    sb.save_screenshot("02_no_buster_icon.png")
+                
                 sb.switch_to_default_content()
-            
-            sb.save_screenshot("03_captcha_solved.png")
+            else:
+                print("✨ 未发现挑战框，可能已自动通过")
 
-            # 4. 提交
+            sb.save_screenshot("03_captcha_state.png")
+
+            # 5. 点击续费按钮
+            print("🔥 [Step 6] 检测续费按钮状态...")
             submit_btn = "button:contains('Complete Verification')"
+            
             for i in range(15):
                 if sb.is_element_enabled(submit_btn):
-                    print(f"✅ 验证通过！点击提交...")
+                    print(f"✅ 验证通过！点击提交 (尝试 {i+1})...")
                     sb.click(submit_btn)
-                    sb.sleep(5)
+                    sb.sleep(6)
                     sb.save_screenshot("04_final_success.png")
-                    print("🎉 任务完成！")
+                    print("🎉 Firefox 续期任务完成！")
                     return
-                # 检测红字拦截
-                if sb.is_text_visible("automated queries") or sb.is_text_visible("自动查询"):
-                    print("❌ [Blocked] Google 拦截了语音请求 (Automated queries)")
-                    return
+                
+                print(f"   ...等待验证通过中 ({i+1}/15)")
                 sb.sleep(3)
             
-            print("❌ [Failed] 未能点击到续费按钮")
+            print("❌ [Failed] 最终未能点击到续费按钮")
+            sb.save_screenshot("04_final_failed.png")
 
         except Exception as e:
-            print(f"💥 [Error] 运行崩溃: {e}")
+            print(f"💥 异常: {e}")
             sb.save_screenshot("error_crash.png")
 
 if __name__ == "__main__":
