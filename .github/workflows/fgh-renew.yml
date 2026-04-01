@@ -1,6 +1,6 @@
 name: FGH-Renew-Test
 on:
-  workflow_dispatch: # 手动触发测试
+  workflow_dispatch: # 手动点击触发
 
 jobs:
   run_fgh_renew:
@@ -14,16 +14,21 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: 🛡️ 启动 GOST 代理转发
+      - name: 🛡️ 启动 GOST v3 代理转发
         run: |
-          wget -q https://github.com/ginuerzh/gost/releases/download/v2.11.5/gost_2.11.5_linux_amd64.tar.gz
-          tar -xzf gost_2.11.5_linux_amd64.tar.gz
+          # 下载你指定的 v3 版本
+          URL="https://github.com/go-gost/gost/releases/download/v3.2.7-nightly.20251122/gost_3.2.7-nightly.20251122_linux_amd64v3.tar.gz"
+          wget -q "$URL" -O gost.tar.gz
+          tar -xzf gost.tar.gz
           chmod +x gost
-          # 直接填入你的代理地址
+          
+          # 启动转发：将 SOCKS5 代理映射到本地 HTTP 8080
+          # 注意：v3 的命令格式依然支持 -L 和 -F
           nohup ./gost -L http://:8080 -F "socks5://506f268b:080db8e0151f@38.58.180.132:3104" > gost.log 2>&1 &
-          sleep 5
-          echo "✅ GOST 已启动，当前出口IP："
-          curl -s -x http://127.0.0.1:8080 https://api.ipify.org || echo "代理连接失败"
+          
+          sleep 8
+          echo "✅ GOST v3 已启动，检查代理出口："
+          curl -s -x http://127.0.0.1:8080 https://api.ipify.org || echo "⚠️ 代理连接失败，请检查SOCKS5是否可用"
 
       - name: 🛠️ 安装环境依赖
         run: |
@@ -32,11 +37,11 @@ jobs:
           pip install seleniumbase
           seleniumbase install chromedriver
 
-      - name: 🚀 运行续费脚本
+      - name: 🚀 运行续费脚本 (明文账号)
         env:
           PYTHONIOENCODING: utf-8
         run: |
-          # 模拟显示器运行脚本
+          # 使用 xvfb 模拟显示器环境
           xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" python renew.py
 
       - name: 📸 上传调试截图
