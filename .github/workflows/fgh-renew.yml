@@ -16,22 +16,19 @@ jobs:
 
       - name: 🛡️ 启动 GOST v3 代理转发
         run: |
-          # 使用你指定的 v3 链接
           URL="https://github.com/go-gost/gost/releases/download/v3.2.7-nightly.20251122/gost_3.2.7-nightly.20251122_linux_amd64v3.tar.gz"
           wget -q "$URL" -O gost.tar.gz
           tar -xzf gost.tar.gz
           chmod +x gost
-          # 映射 SOCKS5
           nohup ./gost -L http://:8080 -F "socks5://506f268b:080db8e0151f@38.58.180.132:3104" > gost.log 2>&1 &
           sleep 10
-          echo "✅ GOST 已启动，当前出口IP："
-          curl -s -x http://127.0.0.1:8080 https://api.ipify.org || echo "代理不通"
+          echo "✅ GOST 已启动"
 
-      - name: 🛠️ 安装环境依赖
+      - name: 🛠️ 安装环境依赖 (增加音频处理库)
         run: |
           sudo apt-get update
-          sudo apt-get install -y google-chrome-stable xvfb
-          pip install seleniumbase
+          sudo apt-get install -y google-chrome-stable xvfb ffmpeg
+          pip install seleniumbase pydub SpeechRecognition
           seleniumbase install chromedriver
 
       - name: 🚀 运行续费脚本
