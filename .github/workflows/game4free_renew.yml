@@ -1,4 +1,4 @@
-name: Game4Free-Final-Fix
+name: Game4Free-Random-Debug
 
 on:
   workflow_dispatch:
@@ -6,34 +6,42 @@ on:
 jobs:
   debug_renew:
     runs-on: ubuntu-latest
+    # 赋予 gh 工具必要的权限
+    permissions:
+      contents: read
+      
     steps:
       - name: 📥 检出代码
         uses: actions/checkout@v4
 
-      - name: 🛡️ 启动 GOST 代理
+      - name: 🐍 设置 Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: 🛡️ 启动 GOST 代理 (GH 原生下载版)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} # 使用内置 Token 确保下载成功
         run: |
-          curl -L -o gost.tar.gz https://github.com/ginuerzh/gost/releases/download/v2.11.5/gost_2.11.5_linux_amd64.tar.gz
-          tar -xzf gost.tar.gz && chmod +x gost
+          # 使用官方 gh 工具下载 GOST，彻底告别 9 字节错误
+          gh release download v2.11.5 --repo ginuerzh/gost --pattern "*linux_amd64.tar.gz" -O gost.tar.gz
+          tar -xzf gost.tar.gz
+          chmod +x gost
+          
+          # 启动隧道
           nohup ./gost -L http://:8080 -F "socks5://506f268b:080db8e0151f@38.58.180.132:3104" > gost.log 2>&1 &
           sleep 5
+          echo "✅ GOST 已就绪"
 
-      - name: 🧩 下载并安装破解插件 (修复版)
+      - name: 🧩 下载破解插件 (GH 原生下载版)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # 创建插件目录
+          # 使用官方 gh 工具下载 Buster 插件
+          gh release download v2.0.1 --repo dessant/buster --pattern "*chrome.zip" -O buster.zip
           mkdir -p captcha_solver
-          # 使用 curl 代替 wget，并添加 User-Agent 模拟浏览器下载，防止 403 错误
-          # 这是一个经测试有效的 Buster 2.0.1 直链
-          curl -L -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
-            -o buster.zip https://github.com/dessant/buster/releases/download/v2.0.1/buster-2.0.1-chrome.zip
-          
-          # 检查下载的文件是否合法 (大于 10KB)
-          if [ $(stat -c%s "buster.zip") -lt 10240 ]; then
-            echo "❌ 插件下载失败，正在尝试备用源..."
-            curl -L -o buster.zip https://github.com/fastfire/deep-checker/raw/master/static/buster.zip
-          fi
-          
-          unzip -o buster.zip -d captcha_solver
-          echo "✅ 插件准备就绪"
+          unzip buster.zip -d captcha_solver
+          echo "✅ 插件已就绪"
 
       - name: 🛠️ 安装环境
         run: |
@@ -51,5 +59,5 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: final-debug-results
+          name: debug-results
           path: "*.png"
