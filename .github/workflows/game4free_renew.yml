@@ -1,10 +1,12 @@
-name: Game4Free-V3-BusterV3-Final
+name: Game4Free-Final-Package
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '0 */6 * * *' # 每 6 小时自动跑一次
 
 jobs:
-  debug_renew:
+  renew:
     runs-on: ubuntu-latest
     steps:
       - name: 📥 检出代码
@@ -15,27 +17,22 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: 🛡️ 启动 GOST V3 代理 (使用指定 v3.2.6 直链)
+      - name: 🛡️ 启动 GOST V3 代理 (指定 v3.2.6)
         run: |
-          # 下载你指定的 GOST v3.2.6
           curl -fL -o gost.tar.gz "https://github.com/go-gost/gost/releases/download/v3.2.6/gost_3.2.6_linux_amd64v3.tar.gz"
-          tar -xzf gost.tar.gz
-          chmod +x gost
-          
-          # 启动隧道 (本地 8080 -> 你的 SOCKS5)
+          tar -xzf gost.tar.gz && chmod +x gost
+          # 启动隧道: 本地 8080 -> 你的 SOCKS5
           nohup ./gost -L http://:8080 -F "socks5://506f268b:080db8e0151f@38.58.180.132:3104" > gost.log 2>&1 &
-          
           sleep 8
-          echo "✅ GOST V3.2.6 已启动"
-          curl -s -x http://127.0.0.1:8080 https://api.ipify.org || echo "代理连接测试失败"
+          echo "✅ GOST 代理已就绪"
 
-      - name: 🧩 下载破解插件 (使用指定 Buster v3.1.0 直链)
+      - name: 🧩 下载破解插件 (指定 Buster v3.1.0)
         run: |
-          # 下载你指定的 Buster v3.1.0
           curl -fL -o buster.zip "https://github.com/dessant/buster/releases/download/v3.1.0/buster_captcha_solver_for_humans-3.1.0-chrome.zip"
           mkdir -p captcha_solver
           unzip -o buster.zip -d captcha_solver
-          echo "✅ Buster V3.1.0 插件已就绪"
+          # 检查 manifest.json 位置，确保插件目录正确
+          ls -R captcha_solver
 
       - name: 🛠️ 安装系统环境
         run: |
@@ -46,12 +43,13 @@ jobs:
 
       - name: 🚀 运行随机名续期脚本
         run: |
+          # 关键：通过 xvfb-run 运行，允许脚本内使用 headless=False 加载插件
           xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" \
             python renew.py
 
-      - name: 📸 上传调试截图
+      - name: 📸 上传截图结果
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: v3-buster3-results
+          name: final-results
           path: "*.png"
