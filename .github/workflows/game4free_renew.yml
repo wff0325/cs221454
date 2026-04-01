@@ -15,35 +15,46 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: 🛡️ 启动 GOST 代理 (改进版)
+      - name: 🛡️ 启动 GOST 代理 (强力安装版)
         shell: bash
         run: |
-          # 1. 下载并解压 GOST (换了一个更可靠的源和解压方式)
-          curl -L -o gost.tar.gz https://github.com/ginuerzh/gost/releases/download/v2.11.5/gost_2.11.5_linux_amd64.tar.gz
-          tar -xzf gost.tar.gz
-          chmod +x gost
+          # 1. 自动获取最新版本的下载链接 (解决 404 问题)
+          DOWNLOAD_URL=$(curl -s https://api.github.com/repos/ginuerzh/gost/releases/latest \
+            | grep "browser_download_url.*linux_amd64.tar.gz" \
+            | cut -d '"' -f 4)
           
-          # 2. 检查文件是否存在
-          if [ ! -f "./gost" ]; then
-            echo "❌ GOST 二进制文件不存在，下载或解压失败"
+          echo "📡 正在从 $DOWNLOAD_URL 下载..."
+          curl -L -o gost.tar.gz "$DOWNLOAD_URL"
+          
+          # 检查文件大小，如果太小肯定不对
+          FILE_SIZE=$(stat -c%s "gost.tar.gz")
+          if [ $FILE_SIZE -lt 1000 ]; then
+            echo "❌ 下载的文件太小 ($FILE_SIZE bytes)，可能是 404 错误页！"
+            cat gost.tar.gz
             exit 1
           fi
 
-          # 3. 启动隧道 (明文写死你的 SOCKS5)
-          echo "🚀 正在建立隧道连接..."
+          # 2. 解压并赋予权限
+          tar -xzf gost.tar.gz
+          chmod +x gost
+          
+          # 3. 启动隧道 (明文 SOCKS5)
+          echo "🚀 建立隧道: 127.0.0.1:8080 -> 38.58.180.132:3104"
           nohup ./gost -L http://:8080 -F "socks5://506f268b:080db8e0151f@38.58.180.132:3104" > gost.log 2>&1 &
           
-          # 4. 等待并验证代理是否通畅
-          sleep 8
-          echo "🌐 测试代理连通性..."
-          PROXY_IP=$(curl -s -x http://127.0.0.1:8080 https://api.ipify.org || echo "failed")
+          # 4. 验证连通性
+          sleep 10
+          echo "🌐 测试出口 IP..."
+          # 使用 --proxy-user 如果需要，但这里 GOST 已经处理了认证，所以直接 curl 即可
+          EXIT_IP=$(curl -s -x http://127.0.0.1:8080 https://api.ipify.org || echo "failed")
           
-          if [ "$PROXY_IP" == "failed" ]; then
-            echo "❌ 代理连接失败！请检查你的 SOCKS5 账号密码是否过期或被封 IP"
+          if [ "$EXIT_IP" == "failed" ]; then
+            echo "❌ 代理握手失败！可能是 SOCKS5 账号密码不对或者 IP 被墙"
+            echo "--- GOST 日志 ---"
             cat gost.log
             exit 1
           else
-            echo "✅ 代理已就绪，出口 IP: $PROXY_IP"
+            echo "✅ 代理连接成功！当前出口 IP: $EXIT_IP"
           fi
 
       - name: 🛠️ 安装环境
