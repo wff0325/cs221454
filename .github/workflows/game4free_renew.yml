@@ -1,4 +1,4 @@
-name: Game4Free-Random-Debug
+name: Game4Free-Final-Debug
 
 on:
   workflow_dispatch:
@@ -6,10 +6,6 @@ on:
 jobs:
   debug_renew:
     runs-on: ubuntu-latest
-    # 赋予 gh 工具必要的权限
-    permissions:
-      contents: read
-      
     steps:
       - name: 📥 检出代码
         uses: actions/checkout@v4
@@ -19,33 +15,33 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: 🛡️ 启动 GOST 代理 (GH 原生下载版)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} # 使用内置 Token 确保下载成功
+      - name: 🛡️ 启动 GOST 代理 (直链硬核版)
         run: |
-          # 使用官方 gh 工具下载 GOST，彻底告别 9 字节错误
-          gh release download v2.11.5 --repo ginuerzh/gost --pattern "*linux_amd64.tar.gz" -O gost.tar.gz
-          tar -xzf gost.tar.gz
-          chmod +x gost
+          # 1. 使用官方确定的 v2.11.5 直链，避免通配符匹配失败
+          curl -fL -o gost.tar.gz "https://github.com/ginuerzh/gost/releases/download/v2.11.5/gost_2.11.5_linux_amd64.tar.gz"
           
-          # 启动隧道
+          # 检查文件是否下载成功（9字节检测）
+          SIZE=$(stat -c%s "gost.tar.gz")
+          if [ "$SIZE" -lt 1000 ]; then echo "❌ 下载失败"; exit 1; fi
+          
+          tar -xzf gost.tar.gz && chmod +x gost
+          
+          # 2. 启动隧道 (使用你提供的明文代理)
           nohup ./gost -L http://:8080 -F "socks5://506f268b:080db8e0151f@38.58.180.132:3104" > gost.log 2>&1 &
           sleep 5
-          echo "✅ GOST 已就绪"
+          echo "✅ GOST 已启动"
 
-      - name: 🧩 下载破解插件 (GH 原生下载版)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: 🧩 下载 Buster 插件 (直链硬核版)
         run: |
-          # 使用官方 gh 工具下载 Buster 插件
-          gh release download v2.0.1 --repo dessant/buster --pattern "*chrome.zip" -O buster.zip
+          # 使用 Buster 2.0.1 确定的直链
+          curl -fL -o buster.zip "https://github.com/dessant/buster/releases/download/v2.0.1/buster-2.0.1-chrome.zip"
           mkdir -p captcha_solver
-          unzip buster.zip -d captcha_solver
-          echo "✅ 插件已就绪"
+          unzip -o buster.zip -d captcha_solver
+          echo "✅ 插件已准备"
 
       - name: 🛠️ 安装环境
         run: |
-          sudo apt-get update
+          sudo apt-get update -q
           sudo apt-get install -y google-chrome-stable xvfb
           pip install seleniumbase
           seleniumbase install chromedriver
@@ -55,9 +51,9 @@ jobs:
           xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" \
             python renew.py
 
-      - name: 📸 上传截图结果
+      - name: 📸 上传调试截图
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: debug-results
+          name: debug-screenshots
           path: "*.png"
