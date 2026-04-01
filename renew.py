@@ -14,84 +14,81 @@ SERVER_ID  = "f715280f"
 # ------------------
 
 def run_test():
-    logger.info(f"🚀 开始登录流程: {USER_EMAIL}")
+    logger.info(f"🚀 开始执行续费脚本: {USER_EMAIL}")
 
-    # 使用 SeleniumBase UC 模式
+    # 使用 UC 模式
     with SB(uc=True, headless=True, proxy=PROXY_ADDR) as sb:
         try:
             # 1. 访问登录页
-            # UC模式下，sb.open会自动尝试处理Cloudflare等待页
             sb.open("https://panel.freegamehost.xyz/auth/login")
-            time.sleep(10) # 留足时间让页面和验证码加载
+            time.sleep(10)
 
-            # 2. 输入账号密码
+            # 2. 检测并尝试解决 reCAPTCHA
+            # 如果页面上有 reCAPTCHA 框架，尝试自动破解
+            if sb.is_element_visible('iframe[src*="recaptcha"]'):
+                logger.info("🛡️ 发现 reCAPTCHA 验证码，尝试破解...")
+                try:
+                    sb.activate_recaptcha_solver()
+                    logger.info("✅ 验证码识别尝试完成")
+                    time.sleep(5)
+                except Exception as ex:
+                    logger.warning(f"⚠️ 验证码识别器报错 (可能IP被锁): {ex}")
+
+            # 3. 输入账号密码
             if sb.is_element_visible('input[name="username"]'):
                 logger.info("正在输入账号密码...")
                 sb.type('input[name="username"]', USER_EMAIL)
                 sb.type('input[name="password"]', USER_PASS)
                 
-                # 使用 uc_click (模拟真人点击) 替代普通 click，防止被识别
-                login_btn = 'button[type="submit"]'
-                if sb.is_element_visible(login_btn):
-                    logger.info("点击登录按钮...")
-                    sb.uc_click(login_btn)
-                else:
-                    # 如果找不到按钮，尝试回车登录
-                    sb.press_keys('input[name="password"]', '\n')
-                
-                time.sleep(15) # 登录跳转通常比较慢
-
-            # --- 验证是否登录成功 ---
-            current_url = sb.get_current_url()
-            logger.info(f"当前页面URL: {current_url}")
-            
-            if "login" in current_url:
-                logger.warning("⚠️ 仍然在登录页面，尝试第二次强制登录...")
-                sb.save_screenshot("login_retry.png")
-                sb.type('input[name="password"]', USER_PASS)
+                # 点击登录
                 sb.click('button[type="submit"]')
-                time.sleep(10)
+                logger.info("已提交登录，正在等待跳转...")
+                time.sleep(15)
 
-            # 3. 跳转到服务器控制台
+            # 4. 再次检查是否被验证码卡住
+            if "login" in sb.get_current_url():
+                logger.warning("仍然在登录页，可能需要第二次处理验证码挑战...")
+                sb.save_screenshot("login_challenge.png")
+                # 如果出现了图片挑战框，尝试再次调用 solver
+                try:
+                    sb.activate_recaptcha_solver()
+                    time.sleep(5)
+                    sb.click('button[type="submit"]')
+                    time.sleep(10)
+                except:
+                    pass
+
+            # 5. 跳转控制台
             console_url = f"https://panel.freegamehost.xyz/server/{SERVER_ID}"
             sb.open(console_url)
-            logger.info(f"正在跳转到控制台: {console_url}")
-            time.sleep(15) # 翼龙面板后台数据加载较慢
+            time.sleep(15)
+            sb.save_screenshot("after_login_attempt.png")
 
-            # 保存一张控制台的截图，确认是否进去了
-            sb.save_screenshot("console_page.png")
-
-            # 4. 检查续费逻辑
+            # 6. 续费逻辑
             timer_selector = "div[class*='RenewBox__TimerDigits']"
             renew_btn = "button:contains('Renew')"
             cooldown_text = "RENEWAL COOLDOWN"
 
-            # 尝试抓取倒计时
             if sb.is_element_visible(timer_selector):
-                time_val = sb.get_text(timer_selector)
-                logger.info(f"⏳ 成功识别倒计时: {time_val}")
+                logger.info(f"⏳ 剩余时间: {sb.get_text(timer_selector)}")
 
-            # 寻找并点击续费
             if sb.is_element_visible(renew_btn):
-                logger.info("🎯 发现 Renew 按钮，开始点击...")
-                sb.uc_click(renew_btn) # 使用模拟真人点击
+                logger.info("🎯 发现 Renew 按钮，执行续费...")
+                sb.uc_click(renew_btn)
                 time.sleep(5)
-                
-                # 检查确认弹窗
                 if sb.is_text_visible("Confirm", "button"):
                     sb.click("button:contains('Confirm')")
                     time.sleep(3)
-                
-                logger.info("✅ 续费流程已触发！")
-                sb.save_screenshot("success_final.png")
+                logger.info("✅ 续费操作成功！")
+                sb.save_screenshot("renew_ok.png")
             elif sb.is_text_visible(cooldown_text):
-                logger.info("ℹ️ 状态提示：仍在冷却中 (Cooldown)，无需续费。")
+                logger.info("ℹ️ 状态: 冷却中，无需操作。")
             else:
-                logger.warning("⚠️ 状态不明：既没看到按钮也没看到冷却文字。")
+                logger.warning("⚠️ 无法识别状态。")
 
         except Exception as e:
-            logger.error(f"❌ 运行报错: {str(e)}")
-            sb.save_screenshot("critical_error.png")
+            logger.error(f"❌ 错误: {str(e)}")
+            sb.save_screenshot("error_final.png")
 
 if __name__ == "__main__":
     run_test()
